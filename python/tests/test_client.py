@@ -17,7 +17,7 @@ from decentralised_art.client import (
 
 from eth_account import Account
 
-from fixtures import ADDR, FORMAT, HASH, SIGNING, TX, ApiRouter
+from fixtures import ADDR, FORMAT, HASH, NONCE, SIGNING, TX, ApiRouter
 
 
 class TestDecentralisedArtClient(unittest.TestCase):
@@ -102,7 +102,9 @@ class TestDecentralisedArtClient(unittest.TestCase):
     def test_transformation_and_condition_endpoints(self) -> None:
         self.assertTrue(self.client.transformation_exists("identity"))
         self.assertFalse(self.client.transformation_exists("missing"))
-        self.assertEqual(self.client.transformation_get("identity").args_count, 1)
+        identity = self.client.transformation_get("identity")
+        self.assertEqual(identity.args_count, 1)
+        self.assertEqual(identity.runtime_code, "0x6080")
         transformation = self.client.transformation_post({
             "name": "shift",
             "sol_src": "return x + 1;",
@@ -118,7 +120,9 @@ class TestDecentralisedArtClient(unittest.TestCase):
 
         self.assertTrue(self.client.condition_exists("always"))
         self.assertFalse(self.client.condition_exists("missing"))
-        self.assertEqual(self.client.condition_get("always").args_count, 0)
+        always = self.client.condition_get("always")
+        self.assertEqual(always.args_count, 0)
+        self.assertIsNone(always.runtime_code)
         condition = self.client.condition_post({"name": "gate", "sol_src": "return true;"})
         self.assertEqual(condition.name, "gate")
         self.assertEqual(condition.owner, ADDR)
@@ -133,6 +137,7 @@ class TestDecentralisedArtClient(unittest.TestCase):
         out = self.client.execute("pitch", 8, {"0": {"start_point": 12, "transformation_shift": 3}})
         self.assertEqual(out.block_number, 7)
         self.assertEqual(out.runner, ADDR)
+        self.assertEqual(out.registry, ADDR)
         self.assertEqual(out.particles[0].path, "/pitch")
         body = json.loads(self.last_request().content.decode())
         self.assertEqual(body["connector_name"], "pitch")
@@ -248,7 +253,7 @@ class TestDecentralisedArtClient(unittest.TestCase):
         self.assertEqual(Account.recover_transaction(sent["raw_tx"]), account.address)
 
         # A signature login forgets the account of an earlier login.
-        self.client.login_with_signature(account.address, "Login nonce: abcd-efgh", "0xSIG")
+        self.client.login_with_signature(account.address, NONCE, "0xSIG")
         with self.assertRaises(RuntimeError):
             self.client.publish("transformation", "shift")
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { DecentralisedArtClient } from '../src/client';
-import { ADDR } from './fixtures';
+import { ADDR, NONCE, SIGN_IN_MESSAGE } from './fixtures';
 
 describe('decentralised.art JS auth facade', () => {
   let sdk: DecentralisedArtClient;
@@ -10,8 +10,9 @@ describe('decentralised.art JS auth facade', () => {
   });
 
   it('authenticates with nonce and attaches bearer token afterwards', async () => {
-    const { nonce } = await sdk.getNonce(ADDR);
-    const auth = await sdk.loginWithSignature(ADDR, `Login nonce: ${nonce}`, '0xSIG');
+    const { nonce, message } = await sdk.getNonce(ADDR);
+    expect(message).toBe(SIGN_IN_MESSAGE);
+    const auth = await sdk.loginWithSignature(ADDR, nonce, '0xSIG');
     expect(auth.access_token).toBe('access-123');
     expect(sdk.accessToken).toBe('access-123');
 
@@ -27,24 +28,25 @@ describe('decentralised.art JS auth facade', () => {
     expect(authHeaders()).toEqual(['Bearer access-123', 'Bearer access-123']);
   });
 
-  it('authenticates wallets with getAddress and the nonce message', async () => {
+  it('authenticates wallets with getAddress and the issued sign-in message', async () => {
     const wallet = {
       getAddress: vi.fn(async () => ADDR),
       signMessage: vi.fn(async (message: string) => {
-        expect(message).toBe('Login nonce: abcd-efgh');
+        expect(message).toBe(SIGN_IN_MESSAGE);
         return '0xSIG';
       }),
     };
 
-    const auth = await sdk.loginWithWallet(wallet);
+    const auth = await sdk.loginWithWallet(wallet, { origin: 'https://example.invalid' });
     expect(auth.access_token).toBe('access-123');
     expect(wallet.getAddress).toHaveBeenCalledOnce();
-    expect(wallet.signMessage).toHaveBeenCalledWith('Login nonce: abcd-efgh');
+    expect(wallet.signMessage).toHaveBeenCalledWith(SIGN_IN_MESSAGE);
 
-    const last = globalThis.__lastRequests.at(-1)!;
-    expect(JSON.parse(last.init?.body as string)).toEqual({
+    const [nonceRequest, authRequest] = globalThis.__lastRequests.slice(-2);
+    expect(new URL(String(nonceRequest.input)).searchParams.get('origin')).toBe('https://example.invalid');
+    expect(JSON.parse(authRequest.init?.body as string)).toEqual({
       address: ADDR,
-      message: 'Login nonce: abcd-efgh',
+      nonce: NONCE,
       signature: '0xSIG',
     });
   });

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { DecentralisedArtClient } from '../src/client';
 import type { DecentralisedArtApiError } from '../src/client';
-import { ADDR, FORMAT, HASH, TX, json } from './fixtures';
+import { ADDR, FORMAT, HASH, NONCE, TX, json } from './fixtures';
 
 const SIGNING = {
   type: '0x2',
@@ -182,7 +182,7 @@ describe('decentralised.art JS SDK wrapper', () => {
   it('gets, checks, and creates transformations and conditions', async () => {
     await expect(sdk.transformationExists('identity')).resolves.toBe(true);
     await expect(sdk.transformationExists('missing')).resolves.toBe(false);
-    expect(await sdk.transformationGet('identity')).toEqual({ name: 'identity', args_count: 1, owner: ADDR, address: '0x0' });
+    expect(await sdk.transformationGet('identity')).toEqual({ name: 'identity', args_count: 1, runtime_code: '0x6080', owner: ADDR, address: '0x0' });
     const transformation = await sdk.transformationPost({ name: 'shift', sol_src: 'return x + 1;' });
     expect(transformation).toEqual({ name: 'shift', owner: ADDR, address: '0x0', args_count: 1 });
     expect(transformation).not.toHaveProperty('sol_src');
@@ -193,7 +193,7 @@ describe('decentralised.art JS SDK wrapper', () => {
 
     await expect(sdk.conditionExists('always')).resolves.toBe(true);
     await expect(sdk.conditionExists('missing')).resolves.toBe(false);
-    expect(await sdk.conditionGet('always')).toEqual({ name: 'always', args_count: 0, owner: ADDR, address: '0x0' });
+    expect(await sdk.conditionGet('always')).toEqual({ name: 'always', args_count: 0, runtime_code: null, owner: ADDR, address: '0x0' });
     const condition = await sdk.conditionPost({ name: 'gate', sol_src: 'return true;' });
     expect(condition).toEqual({ name: 'gate', owner: ADDR, address: '0x0', args_count: 0 });
     expect(condition).not.toHaveProperty('sol_src');
@@ -209,6 +209,7 @@ describe('decentralised.art JS SDK wrapper', () => {
     });
     expect(out.block_number).toBe(7);
     expect(out.runner).toBe(ADDR);
+    expect(out.registry).toBe(ADDR);
     expect(out.particles[0].path).toBe('/pitch');
     expect(out.particles[0].data).toEqual([1, 2, 3]);
 
@@ -366,7 +367,7 @@ describe('decentralised.art JS SDK wrapper', () => {
 
     // A signature login forgets the wallet of an earlier login.
     await client.loginWithWallet(ethersWallet());
-    await client.loginWithSignature(ADDR, 'Login nonce: abcd-efgh', '0xSIG');
+    await client.loginWithSignature(ADDR, NONCE, '0xSIG');
     await expect(client.publish('transformation', 'shift')).rejects.toThrow(/No signer/);
 
     expect(calls).toHaveLength(0);

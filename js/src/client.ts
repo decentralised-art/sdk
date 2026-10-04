@@ -388,26 +388,29 @@ export class DecentralisedArtClient {
     }
 
     /**
-     * Get a one-time nonce for an address.
+     * Get a one-time EIP-4361 sign-in message for an address.
      *
-     * Sign `Login nonce: <nonce>` and submit it to `loginWithSignature`.
+     * Have the wallet sign `message` with `personal_sign`, then submit `nonce` and the signature to
+     * `loginWithSignature` within five minutes. `origin` names the site signing in (a page passes
+     * `window.location.origin`); it must be one the server is configured with.
      */
-    async getNonce(address: Address): Promise<NonceResponse> {
-        return this._api.auth.getNonce(address);
+    async getNonce(address: Address, opts: { origin?: string } = {}): Promise<NonceResponse> {
+        return this._api.auth.getNonce(address, opts.origin);
     }
 
     /**
-     * Authenticate using an address, signed login message, and signature.
+     * Authenticate using an address, the nonce `getNonce` issued to it, and the wallet's signature
+     * of the message issued with that nonce.
      *
      * Stores the returned bearer token on this client for protected endpoints. No wallet is
      * known afterwards, so `publish` needs an explicit `signer`.
      */
     async loginWithSignature(
         address: Address,
-        message: string,
+        nonce: string,
         signature: string
     ): Promise<AuthResponse> {
-        const resp = await this._api.auth.postAuth({ address, message, signature });
+        const resp = await this._api.auth.postAuth({ address, nonce, signature });
         this._accessToken = resp.access_token;
         this._signer = null;
         return resp;
@@ -416,17 +419,16 @@ export class DecentralisedArtClient {
     /**
      * Authenticate with an ethers/browser-style wallet.
      *
-     * Fetches a nonce, signs `Login nonce: <nonce>`, then stores the returned bearer token. A
+     * Fetches a sign-in message, has the wallet sign it, then stores the returned bearer token. A
      * wallet that can sign transactions (an ethers `Wallet`) also becomes the default signer of
-     * `publish`.
+     * `publish`. See `getNonce` for `origin`.
      */
-    async loginWithWallet(wallet: LoginWallet): Promise<AuthResponse> {
+    async loginWithWallet(wallet: LoginWallet, opts: { origin?: string } = {}): Promise<AuthResponse> {
         const address = wallet.address ?? await wallet.getAddress?.();
         if (!address) throw new Error('Wallet address is unavailable');
-        const { nonce } = await this.getNonce(address);
-        const message = `Login nonce: ${nonce}`;
+        const { nonce, message } = await this.getNonce(address, opts);
         const signature = await wallet.signMessage(message);
-        const resp = await this.loginWithSignature(address, message, signature);
+        const resp = await this.loginWithSignature(address, nonce, signature);
 
         const signTransaction = wallet.signTransaction;
         if (signTransaction) {
@@ -453,7 +455,7 @@ export class DecentralisedArtClient {
      * Each ownership list has its own cursor.
      */
     async accountInfo(address: Address, opts: AccountInfoOptions = {}): Promise<AccountInfoResponse> {
-        return this._api.account.getAccount(
+        return this._api.account.getAccountInfo(
             address,
             opts.limit ?? 50,
             opts.afterConnectors,

@@ -143,6 +143,22 @@ class SpecBundler:
                         for key, value in resolved_path_item.items()
                         if key.lower() != "options"
                     }
+                # The browser sets the Origin header itself (fetch cannot), and GET /nonce also has
+                # an `origin` query parameter that a generated `origin` argument would collide with.
+                for key, operation in list(resolved_path_item.items()):
+                    operation_map = optional_map(operation)
+                    if operation_map is None or "parameters" not in operation_map:
+                        continue
+                    operation_map["parameters"] = [
+                        param
+                        for param in as_list(operation_map["parameters"])
+                        if not (
+                            (param_map := optional_map(param)) is not None
+                            and param_map.get("in") == "header"
+                            and str(param_map.get("name")).lower() == "origin"
+                        )
+                    ]
+                    resolved_path_item[key] = operation_map
                 if not any(key.lower() in HTTP_METHODS for key in resolved_path_item):
                     continue
                 if path in bundled_paths:

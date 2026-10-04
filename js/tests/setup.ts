@@ -1,5 +1,5 @@
 import { vi, beforeEach, afterEach } from 'vitest';
-import { ADDR, FORMAT, HASH, TX, json } from './fixtures';
+import { ADDR, FORMAT, HASH, NONCE, SIGN_IN_MESSAGE, TX, json } from './fixtures';
 
 declare global {
   var __lastRequests: Array<{ input: RequestInfo | URL; init?: RequestInit }>;
@@ -30,12 +30,12 @@ beforeEach(() => {
 
     const nonceMatch = pathname.match(/\/nonce\/([^/]+)$/);
     if (nonceMatch && method === 'GET') {
-      return json({ nonce: 'abcd-efgh' });
+      return json({ nonce: NONCE, message: SIGN_IN_MESSAGE });
     }
 
     if (pathname.endsWith('/auth') && method === 'POST') {
       const body = await requestJson(init);
-      if (body.message === 'Login nonce: abcd-efgh') {
+      if (body.nonce === NONCE) {
         return json({ access_token: 'access-123' });
       }
       return json({ error: 'unauthorized' }, 400);
@@ -125,7 +125,7 @@ beforeEach(() => {
       return new Response(null, { status: transformationMatch[1] === 'missing' ? 404 : 200 });
     }
     if (transformationMatch && method === 'GET') {
-      return json({ name: transformationMatch[1], args_count: 1, owner: ADDR, address: '0x0' });
+      return json({ name: transformationMatch[1], args_count: 1, runtime_code: '0x6080', owner: ADDR, address: '0x0' });
     }
     if (pathname.endsWith('/transformation') && method === 'POST') {
       const body = await requestJson(init);
@@ -137,7 +137,7 @@ beforeEach(() => {
       return new Response(null, { status: conditionMatch[1] === 'missing' ? 404 : 200 });
     }
     if (conditionMatch && method === 'GET') {
-      return json({ name: conditionMatch[1], args_count: 0, owner: ADDR, address: '0x0' });
+      return json({ name: conditionMatch[1], args_count: 0, runtime_code: null, owner: ADDR, address: '0x0' });
     }
     if (pathname.endsWith('/condition') && method === 'POST') {
       const body = await requestJson(init);
@@ -150,6 +150,7 @@ beforeEach(() => {
         block_number: 7,
         block_hash: `0x${'b'.repeat(64)}`,
         runner: ADDR,
+        registry: ADDR,
         particles: [{ path: `/${body.connector_name}`, data: [1, 2, 3] }],
       });
     }

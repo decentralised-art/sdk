@@ -8,11 +8,11 @@ from http import HTTPStatus
 from typing import Any, Generator, Mapping, Optional, TypeVar, Union, cast
 
 import httpx
+from eth_account.messages import encode_defunct
 from eth_account.signers.local import LocalAccount
 from eth_typing import HexStr
 
-from .crypto import sign_login_nonce
-from .decentralised_art_api_client.api.account import get_account, get_accounts
+from .decentralised_art_api_client.api.account import get_account_info, get_accounts
 from .decentralised_art_api_client.api.auth import get_nonce, post_auth
 from .decentralised_art_api_client.api.condition import (
     get_condition,
@@ -269,18 +269,22 @@ class Client:
             VersionResponse,
         )
 
-    def get_nonce(self, address: str) -> NonceResponse:
-        """Get a one-time nonce for an address.
+    def get_nonce(self, address: str, *, origin: Optional[str] = None) -> NonceResponse:
+        """Get a one-time EIP-4361 sign-in message for an address.
 
-        Sign `Login nonce: <nonce>` and submit it to `login_with_signature`.
+        Have the wallet sign `message` with `personal_sign`, then submit `nonce`
+        and the signature to `login_with_signature` within five minutes.
+        `origin` names the site signing in; it must be one the server is
+        configured with.
         """
         return _expect(
-            self._call(get_nonce, self._generated, address),
+            self._call(get_nonce, self._generated, address, origin=_optional(origin)),
             NonceResponse,
         )
 
-    def login_with_signature(self, address: str, message: str, signature: str) -> AuthResponse:
-        """Authenticate using an address, signed login message, and signature.
+    def login_with_signature(self, address: str, nonce: str, signature: str) -> AuthResponse:
+        """Authenticate using an address, the nonce `get_nonce` issued to it,
+        and the wallet's signature of the message issued with that nonce.
 
         Stores the returned bearer token on this client for protected endpoints.
         No account is known afterwards, so `publish` needs an explicit account.
@@ -289,7 +293,7 @@ class Client:
             self._call(
                 post_auth,
                 self._generated,
-                body=AuthRequest(address=address, message=message, signature=signature),
+                body=AuthRequest(address=address, nonce=nonce, signature=signature),
             ),
             AuthResponse,
         )
@@ -297,15 +301,18 @@ class Client:
         self._account = None
         return resp
 
-    def login_with_account(self, account: LocalAccount) -> AuthResponse:
+    def login_with_account(
+        self, account: LocalAccount, *, origin: Optional[str] = None
+    ) -> AuthResponse:
         """Authenticate with an eth-account account.
 
-        Fetches a nonce, signs `Login nonce: <nonce>`, then stores the returned
-        bearer token. The account also becomes the default signer of `publish`.
+        Fetches a sign-in message, signs it, then stores the returned bearer
+        token. The account also becomes the default signer of `publish`. See
+        `get_nonce` for `origin`.
         """
-        nonce = self.get_nonce(account.address).nonce
-        message, signature = sign_login_nonce(account, nonce)
-        resp = self.login_with_signature(account.address, message, signature)
+        issued = self.get_nonce(account.address, origin=origin)
+        signature = account.sign_message(encode_defunct(text=issued.message)).signature.hex()
+        resp = self.login_with_signature(account.address, issued.nonce, signature)
         self._account = account
         return resp
 
@@ -339,7 +346,7 @@ class Client:
         """
         return _expect(
             self._call(
-                get_account,
+                get_account_info,
                 self._generated,
                 address,
                 limit=limit,

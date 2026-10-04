@@ -8,6 +8,10 @@ ADDR = "0x1111111111111111111111111111111111111111"
 FORMAT = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 HASH = "0x" + "c" * 64
 TX = "0x" + "d" * 64
+NONCE = "e" * 66
+SIGN_IN_MESSAGE = (
+    f"example.invalid wants you to sign in with your Ethereum account:\n{ADDR}\n\nNonce: {NONCE}"
+)
 
 
 def make_json(data: object, status_code: int = 200) -> httpx.Response:
@@ -86,11 +90,11 @@ class ApiRouter:
             return make_json({"version": "0.4.0", "build_timestamp": "2026-04-30T00:00:00Z"})
 
         if "/nonce/" in path and method == "GET":
-            return make_json({"nonce": "abcd-efgh"})
+            return make_json({"nonce": NONCE, "message": SIGN_IN_MESSAGE})
 
         if path.endswith("/auth") and method == "POST":
             body = json.loads(request.content.decode())
-            if body["message"] == "Login nonce: abcd-efgh":
+            if body["nonce"] == NONCE:
                 return make_json({"access_token": "access-123"})
             return make_json({"error": "bad_request"}, 400)
 
@@ -156,6 +160,7 @@ class ApiRouter:
                 "owner": ADDR,
                 "address": "0x0",
                 "args_count": 1,
+                "runtime_code": "0x6080",
             })
         if path.endswith("/transformation") and method == "POST":
             body = json.loads(request.content.decode())
@@ -171,6 +176,7 @@ class ApiRouter:
                 "owner": ADDR,
                 "address": "0x0",
                 "args_count": 0,
+                "runtime_code": None,
             })
         if path.endswith("/condition") and method == "POST":
             body = json.loads(request.content.decode())
@@ -184,6 +190,7 @@ class ApiRouter:
                 "block_number": 7,
                 "block_hash": "0x" + "b" * 64,
                 "runner": ADDR,
+                "registry": ADDR,
                 "particles": [{"path": f"/{body['connector_name']}", "data": [1, 2, 3]}],
             })
 

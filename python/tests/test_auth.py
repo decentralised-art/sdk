@@ -2,16 +2,13 @@ from __future__ import annotations
 
 import json
 import unittest
-from types import SimpleNamespace
-from unittest.mock import patch
 
 import httpx
 from eth_account import Account
 from eth_account.messages import encode_defunct
 
 from decentralised_art.client import Client
-from decentralised_art.crypto import sign_login_nonce
-from fixtures import ADDR, ApiRouter
+from fixtures import ADDR, NONCE, SIGN_IN_MESSAGE, ApiRouter
 
 
 class TestDecentralisedArtAuth(unittest.TestCase):
@@ -25,8 +22,15 @@ class TestDecentralisedArtAuth(unittest.TestCase):
     def last_request(self) -> httpx.Request:
         return self.router.requests[-1]
 
+    def test_get_nonce_returns_the_sign_in_message_and_passes_origin(self) -> None:
+        issued = self.client.get_nonce(ADDR, origin="https://example.invalid")
+        self.assertEqual((issued.nonce, issued.message), (NONCE, SIGN_IN_MESSAGE))
+        self.assertEqual(
+            self.last_request().url.params.get("origin"), "https://example.invalid"
+        )
+
     def test_login_with_signature_sets_token_and_posts_auth_body(self) -> None:
-        out = self.client.login_with_signature(ADDR, "Login nonce: abcd-efgh", "0xSIG")
+        out = self.client.login_with_signature(ADDR, NONCE, "0xSIG")
         self.assertEqual(out.access_token, "access-123")
         self.assertEqual(self.client.access_token, "access-123")
 
@@ -34,30 +38,22 @@ class TestDecentralisedArtAuth(unittest.TestCase):
         self.assertNotIn("authorization", request.headers)
         self.assertEqual(
             json.loads(request.content.decode()),
-            {"address": ADDR, "message": "Login nonce: abcd-efgh", "signature": "0xSIG"},
+            {"address": ADDR, "nonce": NONCE, "signature": "0xSIG"},
         )
 
-    def test_login_with_account_sets_access_token(self) -> None:
-        account = SimpleNamespace(address=ADDR)
-        with patch(
-            "decentralised_art.client.sign_login_nonce",
-            return_value=("Login nonce: abcd-efgh", "0xSIG"),
-        ):
-            out = self.client.login_with_account(account)
+    def test_login_with_account_signs_the_issued_message(self) -> None:
+        account = Account.create()
+        out = self.client.login_with_account(account)
         self.assertEqual(out.access_token, "access-123")
         self.assertEqual(self.client.access_token, "access-123")
 
-    def test_sign_login_nonce_returns_expected_message_and_valid_signature(self) -> None:
-        account = Account.create()
-
-        message, signature = sign_login_nonce(account, "nonce-123")
+        body = json.loads(self.last_request().content.decode())
+        self.assertEqual((body["address"], body["nonce"]), (account.address, NONCE))
         recovered = Account.recover_message(
-            encode_defunct(text=message),
-            signature=signature,
+            encode_defunct(text=SIGN_IN_MESSAGE),
+            signature=body["signature"],
         )
-
-        self.assertEqual(message, "Login nonce: nonce-123")
-        self.assertEqual(recovered.lower(), account.address.lower())
+        self.assertEqual(recovered, account.address)
 
 
 if __name__ == "__main__":

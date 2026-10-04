@@ -54,7 +54,7 @@ class TestCli(unittest.TestCase):
     def test_nonce_command_prints_json_for_address(self) -> None:
         with patch("decentralised_art.cli.Client") as client_cls:
             client = client_cls.return_value
-            client.get_nonce.return_value = {"nonce": "abcd-efgh"}
+            client.get_nonce.return_value = {"nonce": "e" * 66, "message": "Sign in"}
 
             stdout = io.StringIO()
             with patch.object(
@@ -66,7 +66,7 @@ class TestCli(unittest.TestCase):
 
         client_cls.assert_called_once_with(base_url=None)
         client.get_nonce.assert_called_once_with("0x1111111111111111111111111111111111111111")
-        self.assertEqual(json.loads(stdout.getvalue()), {"nonce": "abcd-efgh"})
+        self.assertEqual(json.loads(stdout.getvalue()), {"nonce": "e" * 66, "message": "Sign in"})
 
 
 if __name__ == "__main__":

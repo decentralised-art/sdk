@@ -96,6 +96,15 @@ class SpecBundler {
                         Object.entries(resolved).filter(([key]) => key.toLowerCase() !== 'options')
                     );
                 }
+                // The browser sets the Origin header itself (fetch cannot), and GET /nonce also has
+                // an `origin` query parameter that a generated `origin` argument would collide with.
+                for (const operation of Object.values(resolved)) {
+                    if (Array.isArray(operation?.parameters)) {
+                        operation.parameters = operation.parameters.filter(
+                            (param) => !(param?.in === 'header' && String(param.name).toLowerCase() === 'origin')
+                        );
+                    }
+                }
                 if (!Object.keys(resolved).some((key) => HTTP_METHODS.has(key.toLowerCase()))) continue;
                 if (p in bundled.paths) throw new Error(`Duplicate path in chain API specs: ${p}`);
                 bundled.paths[p] = resolved;

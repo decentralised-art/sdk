@@ -99,8 +99,9 @@ sent, and the browser wallet flow below is the way to publish.
 The steps are also available one by one: `publishPrepare(kind, name, { relay: true })`,
 `publishSend(kind, { name, content_hash, raw_tx })` and `publishConfirm`.
 
-**Browser wallet.** A wallet such as MetaMask sends the transaction itself (it cannot
-sign without sending):
+**Browser wallet.** Log in with `sdk.loginWithWallet(signer, { origin: window.location.origin })`
+so the EIP-4361 sign-in message names your page (the origin must be one the server is configured
+with). A wallet such as MetaMask sends the transaction itself (it cannot sign without sending):
 
 ```typescript
 const prepared = await sdk.publishPrepare('transformation', 'shift');
